@@ -2,6 +2,7 @@
 package sifive.fpgashells.ip.xilinx.vc707mig
 
 import Chisel._
+import chisel3.util._
 import chisel3.experimental.{Analog,attach}
 import freechips.rocketchip.util.{ElaborationArtefacts}
 import freechips.rocketchip.util.GenericParameterizedBundle
@@ -28,6 +29,13 @@ class VC707MIGIODDR(depth : BigInt) extends GenericParameterizedBundle(depth) {
   val ddr3_dq               = Analog(64.W)
   val ddr3_dqs_n            = Analog(8.W)
   val ddr3_dqs_p            = Analog(8.W)
+
+  // Latency Control
+  val nvmm_begin            = Bits(INPUT,  3)
+  val lat_fr                = Bits(INPUT,  8)
+  val lat_fw                = Bits(INPUT,  8)
+  val cnt_act               = Bits(OUTPUT, 64)
+  //val cnt_pre               = Bits(OUTPUT, 64)
 }
 
 //reused directly in io bundle for sifive.blocks.devices.xilinxvc707mig
@@ -118,7 +126,7 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
     <LowPower_En>ON</LowPower_En>
     <XADC_En>Enabled</XADC_En>
     <TargetFPGA>xc7vx485t-ffg1761/-2</TargetFPGA>
-    <Version>3.0</Version>
+    <Version>4.2</Version>
     <SystemClock>No Buffer</SystemClock>
     <ReferenceClock>Use System Clock</ReferenceClock>
     <SysResetPolarity>ACTIVE HIGH</SysResetPolarity>
@@ -144,12 +152,14 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
         <DataMask>1</DataMask>
         <ECC>Disabled</ECC>
         <Ordering>Normal</Ordering>
+        <BankMachineCnt>8</BankMachineCnt>
         <CustomPart>FALSE</CustomPart>
         <NewPartName></NewPartName>
         <RowAddress>14</RowAddress>
         <ColAddress>10</ColAddress>
         <BankAddress>3</BankAddress>
         <MemoryVoltage>1.5V</MemoryVoltage>
+        <C0_MEM_SIZE>1073741824</C0_MEM_SIZE>
         <UserMemoryAddressMap>BANK_ROW_COLUMN</UserMemoryAddressMap>
         <PinSelection>
             <Pin VCCAUX_IO="HIGH" IOSTANDARD="SSTL15" PADName="A20" SLEW="FAST" name="ddr3_addr[0]" IN_TERM="" />
@@ -321,7 +331,7 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
     <LowPower_En>ON</LowPower_En>
     <XADC_En>Enabled</XADC_En>
     <TargetFPGA>xc7vx485t-ffg1761/-2</TargetFPGA>
-    <Version>3.0</Version>
+    <Version>4.2</Version>
     <SystemClock>No Buffer</SystemClock>
     <ReferenceClock>Use System Clock</ReferenceClock>
     <SysResetPolarity>ACTIVE HIGH</SysResetPolarity>
@@ -347,12 +357,14 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
         <DataMask>1</DataMask>
         <ECC>Disabled</ECC>
         <Ordering>Normal</Ordering>
+        <BankMachineCnt>8</BankMachineCnt>
         <CustomPart>FALSE</CustomPart>
         <NewPartName></NewPartName>
         <RowAddress>16</RowAddress>
         <ColAddress>10</ColAddress>
         <BankAddress>3</BankAddress>
         <MemoryVoltage>1.5V</MemoryVoltage>
+        <C0_MEM_SIZE>4294967296</C0_MEM_SIZE>
         <UserMemoryAddressMap>BANK_ROW_COLUMN</UserMemoryAddressMap>
         <PinSelection>
             <Pin VCCAUX_IO="HIGH" IOSTANDARD="SSTL15" PADName="A20" SLEW="FAST" name="ddr3_addr[0]" IN_TERM="" />

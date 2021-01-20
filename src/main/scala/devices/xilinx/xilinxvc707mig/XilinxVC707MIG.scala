@@ -2,7 +2,8 @@
 package sifive.fpgashells.devices.xilinx.xilinxvc707mig
 
 import Chisel._
-import chisel3.experimental.{Analog,attach}
+import chisel3.experimental.{Analog,attach, withClockAndReset}
+import chisel3.core.dontTouch
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.subsystem._
@@ -10,6 +11,8 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.interrupts._
 import sifive.fpgashells.ip.xilinx.vc707mig.{VC707MIGIOClocksReset, VC707MIGIODDR, vc707mig}
+
+import sifive.blocks.devices.nvmmctr._
 
 case class XilinxVC707MIGParams(
   address : Seq[AddressSet]
@@ -22,6 +25,18 @@ class XilinxVC707MIGPads(depth : BigInt) extends VC707MIGIODDR(depth) {
 }
 
 class XilinxVC707MIGIO(depth : BigInt) extends VC707MIGIODDR(depth) with VC707MIGIOClocksReset
+{
+  val lat_cr                = Bits(INPUT,  8)
+  val lat_cw                = Bits(INPUT,  8)
+  val lat_dr256             = Bits(INPUT,  8)
+  val lat_dr4096            = Bits(INPUT,  8)
+  val lat_dw256             = Bits(INPUT,  8)
+  val lat_dw4096            = Bits(INPUT,  8)
+  val cnt_read              = Bits(OUTPUT, 64)
+  val cnt_write             = Bits(OUTPUT, 64)
+  val cnt_bdr               = Bits(OUTPUT, 64)
+  val cnt_bdw               = Bits(OUTPUT, 64)
+}
 
 class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossingType = AsynchronousCrossing(8))(implicit p: Parameters) extends LazyModule with CrossesToOnlyOneClockDomain {
   val ranges = AddressRange.fromSets(c.address)
@@ -102,8 +117,8 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     blackbox.io.s_axi_awcache := UInt("b0011")
     blackbox.io.s_axi_awprot  := axi_async.aw.bits.prot
     blackbox.io.s_axi_awqos   := axi_async.aw.bits.qos
-    blackbox.io.s_axi_awvalid := axi_async.aw.valid
-    axi_async.aw.ready        := blackbox.io.s_axi_awready
+    //blackbox.io.s_axi_awvalid := axi_async.aw.valid
+    //axi_async.aw.ready        := blackbox.io.s_axi_awready
 
     //slave interface write data ports
     blackbox.io.s_axi_wdata   := axi_async.w.bits.data
@@ -128,8 +143,8 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     blackbox.io.s_axi_arcache := UInt("b0011")
     blackbox.io.s_axi_arprot  := axi_async.ar.bits.prot
     blackbox.io.s_axi_arqos   := axi_async.ar.bits.qos
-    blackbox.io.s_axi_arvalid := axi_async.ar.valid
-    axi_async.ar.ready        := blackbox.io.s_axi_arready
+    //blackbox.io.s_axi_arvalid := axi_async.ar.valid
+    //axi_async.ar.ready        := blackbox.io.s_axi_arready
 
     //slace AXI interface read data ports
     blackbox.io.s_axi_rready  := axi_async.r.ready
@@ -143,6 +158,51 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     io.port.init_calib_complete := blackbox.io.init_calib_complete
     blackbox.io.sys_rst       :=io.port.sys_rst
     //mig.device_temp         :- unconnceted
+
+
+    val nvmmctr = withClockAndReset(io.port.sys_clk_i.asClock, io.port.sys_rst){
+      Module(new NVMMCTRModule())
+    }
+
+    //nvmmctr.io.clock          := io.port.sys_clk_i.asClock
+    //nvmmctr.io.reset          := io.port.sys_rst
+
+    nvmmctr.io.mbus_arvalid   := axi_async.ar.valid
+    axi_async.ar.ready        := nvmmctr.io.mbus_arready
+    nvmmctr.io.mbus_araddr    := araddr
+
+    nvmmctr.io.mbus_awvalid   := axi_async.aw.valid
+    axi_async.aw.ready        := nvmmctr.io.mbus_awready
+    nvmmctr.io.mbus_awaddr    := awaddr
+
+    blackbox.io.s_axi_arvalid := nvmmctr.io.mig_arvalid
+    nvmmctr.io.mig_arready    := blackbox.io.s_axi_arready
+
+    blackbox.io.s_axi_awvalid := nvmmctr.io.mig_awvalid
+    nvmmctr.io.mig_awready    := blackbox.io.s_axi_awready
+
+    //nvmmctr.io.clear          := false.B
+    nvmmctr.io.nvmm_begin     := io.port.nvmm_begin
+    nvmmctr.io.lat_cr         := io.port.lat_cr
+    nvmmctr.io.lat_cw         := io.port.lat_cw
+    nvmmctr.io.lat_dr256      := io.port.lat_dr256
+    nvmmctr.io.lat_dr4096     := io.port.lat_dr4096
+    nvmmctr.io.lat_dw256      := io.port.lat_dw256
+    nvmmctr.io.lat_dw4096     := io.port.lat_dw4096
+    io.port.cnt_read          := nvmmctr.io.cnt_read
+    io.port.cnt_write         := nvmmctr.io.cnt_write
+    io.port.cnt_bdr           := nvmmctr.io.cnt_bdr
+    io.port.cnt_bdw           := nvmmctr.io.cnt_bdw
+
+    blackbox.io.nvmm_begin    := io.port.nvmm_begin
+    blackbox.io.lat_fr        := io.port.lat_fr
+    blackbox.io.lat_fw        := io.port.lat_fw
+    io.port.cnt_act           := blackbox.io.cnt_act
+    //io.port.cnt_pre           := blackbox.io.cnt_pre
+
+    //dontTouch(nvmmctr.io)
+    //dontTouch(io.port)
+
   }
 }
 
@@ -166,5 +226,6 @@ class XilinxVC707MIG(c : XilinxVC707MIGParams, crossing: ClockCrossingType = Asy
     })
 
     io.port <> island.module.io.port
+    dontTouch(io.port)
   }
 }
