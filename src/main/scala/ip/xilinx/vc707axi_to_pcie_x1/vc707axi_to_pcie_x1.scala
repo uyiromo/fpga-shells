@@ -401,7 +401,7 @@ class VC707AXIToPCIeX1(implicit p:Parameters) extends LazyModule
   ElaborationArtefacts.add(
     "vc707axi_to_pcie_x1.vivado.tcl",
     """ 
-      create_ip -vendor xilinx.com -library ip -version 2.8 -name axi_pcie -module_name vc707axi_to_pcie_x1 -dir $ipdir -force
+      create_ip -vendor xilinx.com -library ip -version 2.9 -name axi_pcie -module_name vc707axi_to_pcie_x1 -dir $ipdir -force
       set_property -dict [list \
       CONFIG.AXIBAR2PCIEBAR_0             {0x40000000} \
       CONFIG.AXIBAR2PCIEBAR_1             {0x00000000} \
