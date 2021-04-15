@@ -32,10 +32,10 @@ class VC707MIGIODDR(depth : BigInt) extends GenericParameterizedBundle(depth) {
 
   // Latency Control
   val nvmm_begin            = Bits(INPUT,  3)
-  val lat_fr                = Bits(INPUT,  8)
-  val lat_fw                = Bits(INPUT,  8)
+  val tRCD2                 = Bits(INPUT,  8)
+  val tRP2                  = Bits(INPUT,  8)
+  val tRAS2                 = Bits(INPUT, 11)
   val cnt_act               = Bits(OUTPUT, 64)
-  //val cnt_pre               = Bits(OUTPUT, 64)
 }
 
 //reused directly in io bundle for sifive.blocks.devices.xilinxvc707mig

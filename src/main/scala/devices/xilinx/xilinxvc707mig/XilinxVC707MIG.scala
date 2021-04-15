@@ -52,8 +52,8 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
       resources     = device.reg,
       regionType    = RegionType.UNCACHED,
       executable    = true,
-      supportsWrite = TransferSizes(1, 128),
-      supportsRead  = TransferSizes(1, 128))),
+      supportsWrite = TransferSizes(1, 64),
+      supportsRead  = TransferSizes(1, 64))),
     beatBytes = 8)))
 
   lazy val module = new LazyRawModuleImp(this) {
@@ -195,10 +195,10 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     io.port.cnt_bdw           := nvmmctr.io.cnt_bdw
 
     blackbox.io.nvmm_begin    := io.port.nvmm_begin
-    blackbox.io.lat_fr        := io.port.lat_fr
-    blackbox.io.lat_fw        := io.port.lat_fw
+    blackbox.io.tRCD2         := io.port.tRCD2
+    blackbox.io.tRP2          := io.port.tRP2
+    blackbox.io.tRAS2         := io.port.tRAS2
     io.port.cnt_act           := blackbox.io.cnt_act
-    //io.port.cnt_pre           := blackbox.io.cnt_pre
 
     //dontTouch(nvmmctr.io)
     //dontTouch(io.port)
