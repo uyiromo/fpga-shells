@@ -82,8 +82,8 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
     val s_axi_awvalid         = Bool(INPUT)
     val s_axi_awready         = Bool(OUTPUT)
     //slave interface write data ports
-    val s_axi_wdata           = Bits(INPUT,64)
-    val s_axi_wstrb           = Bits(INPUT,8)
+    val s_axi_wdata           = Bits(INPUT,512)
+    val s_axi_wstrb           = Bits(INPUT,64)
     val s_axi_wlast           = Bool(INPUT)
     val s_axi_wvalid          = Bool(INPUT)
     val s_axi_wready          = Bool(OUTPUT)
@@ -107,7 +107,7 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
     //slave interface read data ports
     val s_axi_rready          = Bool(INPUT)
     val s_axi_rid             = Bits(OUTPUT,4)
-    val s_axi_rdata           = Bits(OUTPUT,64)
+    val s_axi_rdata           = Bits(OUTPUT,512)
     val s_axi_rresp           = Bits(OUTPUT,2)
     val s_axi_rlast           = Bool(OUTPUT)
     val s_axi_rvalid          = Bool(OUTPUT)
@@ -516,7 +516,7 @@ class vc707mig(depth : BigInt)(implicit val p:Parameters) extends BlackBox
         <AXIParameters>
             <C0_C_RD_WR_ARB_ALGORITHM>RD_PRI_REG</C0_C_RD_WR_ARB_ALGORITHM>
             <C0_S_AXI_ADDR_WIDTH>32</C0_S_AXI_ADDR_WIDTH>
-            <C0_S_AXI_DATA_WIDTH>64</C0_S_AXI_DATA_WIDTH>
+            <C0_S_AXI_DATA_WIDTH>512</C0_S_AXI_DATA_WIDTH>
             <C0_S_AXI_ID_WIDTH>4</C0_S_AXI_ID_WIDTH>
             <C0_S_AXI_SUPPORTS_NARROW_BURST>0</C0_S_AXI_SUPPORTS_NARROW_BURST>
         </AXIParameters>
