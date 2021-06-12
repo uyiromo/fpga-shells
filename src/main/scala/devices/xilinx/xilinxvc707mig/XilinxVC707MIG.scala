@@ -126,7 +126,7 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
       "mpePLL",
       PLLInClockParameters(200),     // Input: 200 MHz
       Seq(
-        PLLOutClockParameters(100)   // Output 100 MHz
+        PLLOutClockParameters(50)   // Output 100 MHz
       )
     )))
     mpe_pll.io.clk_in1  := io.port.sys_clk_i.asClock
