@@ -31,11 +31,11 @@ class VC707MIGIODDR(depth : BigInt) extends GenericParameterizedBundle(depth) {
   val ddr3_dqs_p            = Analog(8.W)
 
   // Latency Control
-  val nvmm_begin            = Bits(INPUT,  3)
+  //val nvmm_begin            = Bits(INPUT,  3)
   val tRCD2                 = Bits(INPUT,  8)
   val tRP2                  = Bits(INPUT,  8)
-  val tRAS2                 = Bits(INPUT, 11)
-  val cnt_act               = Bits(OUTPUT, 64)
+  //val tRAS2                 = Bits(INPUT, 11)
+  val cnt_act               = Bits(OUTPUT, 40)
 }
 
 //reused directly in io bundle for sifive.blocks.devices.xilinxvc707mig

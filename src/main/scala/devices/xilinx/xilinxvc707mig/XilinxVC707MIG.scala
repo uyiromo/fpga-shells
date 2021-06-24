@@ -36,10 +36,10 @@ class XilinxVC707MIGIO(depth : BigInt) extends VC707MIGIODDR(depth) with VC707MI
   val lat_dr4096            = Bits(INPUT,  8)
   val lat_dw256             = Bits(INPUT,  8)
   val lat_dw4096            = Bits(INPUT,  8)
-  val cnt_read              = Bits(OUTPUT, 64)
-  val cnt_write             = Bits(OUTPUT, 64)
-  val cnt_bdr               = Bits(OUTPUT, 64)
-  val cnt_bdw               = Bits(OUTPUT, 64)
+  val cnt_read              = Bits(OUTPUT, 40)
+  val cnt_write             = Bits(OUTPUT, 40)
+  val cnt_bdr               = Bits(OUTPUT, 40)
+  val cnt_bdw               = Bits(OUTPUT, 40)
 }
 
 class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossingType = AsynchronousCrossing(8))(implicit p: Parameters) extends LazyModule with CrossesToOnlyOneClockDomain {
@@ -136,10 +136,18 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     val sysClk = io.port.sys_clk_i.asClock
     val sysRst = io.port.sys_rst | childReset
     val mpeClk = mpe_pll.io.clk_out1.get
-    val mpeRst = !mpe_pll.io.locked | io.port.sys_rst | childReset
+
+    val uninit = withClockAndReset(sysClk, sysRst) { RegInit(true.B) }
+    val mpeRst = uninit
+    withClockAndReset(sysClk, sysRst) {
+      when (uninit & axi_async.ar.valid) {
+        uninit := false.B
+      }
+    }
+    val sysRst2 = mpeRst
 
     // Memory Protection Engine
-    val mpe = withClockAndReset(mpeClk, mpeRst){ Module(new MPE(4)) }
+    val mpe = withClockAndReset(mpeClk, mpeRst){ Module(new MPE(8)) }
 
 
     // connections
@@ -159,7 +167,6 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
 
       queueAR.io.enq <> axi_async.ar
       mpe.io.cpu.ar  <> queueAR.io.deq
-      //queueAR.io.enq.bits.addr := araddr
       queueAR.io.enq.bits.addr := araddr(31, 6)
 
       queueR.io.enq <> mpe.io.cpu.r
@@ -167,7 +174,6 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
 
       queueAW.io.enq <> axi_async.aw
       mpe.io.cpu.aw  <> queueAW.io.deq
-      //queueAW.io.enq.bits.addr := awaddr
       queueAW.io.enq.bits.addr := awaddr(31, 6)
 
       queueW.io.enq <> axi_async.w
@@ -181,63 +187,62 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
      * MPE <--> NVMMCTR <--> MIG
      */
     withClockAndReset(sysClk, sysRst){
-      val idBits  = 4
+      val idBits   = 4
       val dataBits = 512
       val queueAR = genAsyncQueue(new AXI4BusAS(idBits),           mpeClk, mpeRst, sysClk, sysRst)
       val queueR  = genAsyncQueue(new AXI4BusRS(idBits, dataBits), sysClk, sysRst, mpeClk, mpeRst)
       val queueAW = genAsyncQueue(new AXI4BusAS(idBits),           mpeClk, mpeRst, sysClk, sysRst)
       val queueW  = genAsyncQueue(new AXI4BusWS(dataBits),         mpeClk, mpeRst, sysClk, sysRst)
-      val queueB  = genAsyncQueue(new AXI4BusB(idBits),           sysClk, sysRst, mpeClk, mpeRst)
+      val queueB  = genAsyncQueue(new AXI4BusBS(idBits),           sysClk, sysRst, mpeClk, mpeRst)
+
+      val rbuf = Module(new BurstBuffer(512, 256))
+      val wbuf = Module(new BurstBuffer(512, 256))
 
       // AR except for valid/ready
       queueAR.io.enq <> mpe.io.mem.ar
       blackbox.io.s_axi_arid    := queueAR.io.deq.bits.id
-      //blackbox.io.s_axi_araddr  := queueAR.io.deq.bits.addr
       blackbox.io.s_axi_araddr  := Cat(queueAR.io.deq.bits.addr, 0.U(6.W))
-      blackbox.io.s_axi_arlen   := 0.U(8.W)     // 1 beat
-      blackbox.io.s_axi_arsize  := 6.U(3.W)     // 2**6 bytes/beat
+      blackbox.io.s_axi_arlen   := 1.U(8.W)     // 2 beat
+      blackbox.io.s_axi_arsize  := 5.U(3.W)     // 2**5 bytes/beat
       blackbox.io.s_axi_arburst := "b01".U(2.W) // INCR burst
-      //blackbox.io.s_axi_arlock  := unconnected
-      //blackbox.io.s_axi_arcache := unconnected
-      //blackbox.io.s_axi_arprot  := unconnected
-      //blackbox.io.s_axi_arqos   := unconnected
 
       // R
-      mpe.io.mem.r <> queueR.io.deq
+      mpe.io.mem.r  <> queueR.io.deq
       queueR.io.enq.bits.id    := blackbox.io.s_axi_rid
-      queueR.io.enq.bits.data  := blackbox.io.s_axi_rdata
-      queueR.io.enq.bits.resp  := blackbox.io.s_axi_rresp
-      //queueR.io.enq.bits.last  := blackbox.io.s_axi_rlast
-      queueR.io.enq.valid      := blackbox.io.s_axi_rvalid
-      blackbox.io.s_axi_rready := queueR.io.enq.ready
+      //queueR.io.enq.bits.data  := blackbox.io.s_axi_rdata
+      //queueR.io.enq.valid      := blackbox.io.s_axi_rvalid
+      //blackbox.io.s_axi_rready := queueR.io.enq.ready
+      rbuf.io.sink.valid       := blackbox.io.s_axi_rdata
+      blackbox.io.s_axi_rready := rbuf.io.sink.ready
+      rbuf.io.sink.bits        := blackbox.io.s_axi_rdata
+      queueR.io.enq.bits.data  := rbuf.io.source.bits
 
       // AW except for valid/ready
       queueAW.io.enq <> mpe.io.mem.aw
       blackbox.io.s_axi_awid    := queueAW.io.deq.bits.id
-      //blackbox.io.s_axi_awaddr  := queueAW.io.deq.bits.addr
       blackbox.io.s_axi_awaddr  := Cat(queueAW.io.deq.bits.addr, 0.U(6.W))
-      blackbox.io.s_axi_awlen   := 0.U(8.W)     // 1 beat
-      blackbox.io.s_axi_awsize  := 6.U(3.W)     // 2**6 bytes/beat
+      blackbox.io.s_axi_awlen   := 1.U(8.W)     // 2 beat
+      blackbox.io.s_axi_awsize  := 5.U(3.W)     // 2**5 bytes/beat
       blackbox.io.s_axi_awburst := "b01".U(2.W) // INCR burst
-      //blackbox.io.s_axi_awlock  := unconnected
-      //blackbox.io.s_axi_awcache := unconnected
-      //blackbox.io.s_axi_awprot  := unconnected
-      //blackbox.io.s_axi_awqos   := unconnected
 
       // W
-      queueW.io.enq <> mpe.io.mem.w
-      blackbox.io.s_axi_wdata  := queueW.io.deq.bits.data
-      //blackbox.io.s_axi_wstrb  := queueW.io.deq.bits.strb
-      //blackbox.io.s_axi_wlast  := queueW.io.deq.bits.last
-      blackbox.io.s_axi_wstrb  := "xFFFFFFFFFFFFFFFF".U(64.W)
-      blackbox.io.s_axi_wlast  := true.B  // only 1 beat
-      blackbox.io.s_axi_wvalid := queueW.io.deq.valid
-      queueW.io.deq.ready      := blackbox.io.s_axi_wready
+      queueW.io.enq  <> mpe.io.mem.w
+      //blackbox.io.s_axi_wdata  := queueW.io.deq.bits.data
+      blackbox.io.s_axi_wstrb  := "xFFFFFFFF".U(32.W)
+      //blackbox.io.s_axi_wlast  := true.B  // only 1 beat
+      //blackbox.io.s_axi_wvalid := queueW.io.deq.valid
+      //queueW.io.deq.ready      := blackbox.io.s_axi_wready
+      wbuf.io.sink.valid := queueW.io.deq.valid
+      wbuf.io.sink.bits  := queueW.io.deq.bits.data
+      queueW.io.deq.ready := wbuf.io.sink.ready
+      blackbox.io.s_axi_wdata  := wbuf.io.source.bits
+      blackbox.io.s_axi_wlast  := wbuf.io.last
+      blackbox.io.s_axi_wvalid := wbuf.io.source.valid
+      wbuf.io.source.ready     := blackbox.io.s_axi_wready
 
       // B
       mpe.io.mem.b <> queueB.io.deq
       queueB.io.enq.bits.id     := blackbox.io.s_axi_bid
-      queueB.io.enq.bits.resp   := blackbox.io.s_axi_bresp
       queueB.io.enq.valid       := blackbox.io.s_axi_bvalid
       blackbox.io.s_axi_bready  := queueB.io.enq.ready
 
@@ -265,22 +270,27 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
     }
 
     //nvmmctr.io.clear          := false.B
-    nvmmctr.io.nvmm_begin     := io.port.nvmm_begin
+    //nvmmctr.io.nvmm_begin     := io.port.nvmm_begin
+    nvmmctr.io.nvmm_begin     := 2.U(3.W)
     nvmmctr.io.lat_cr         := io.port.lat_cr
     nvmmctr.io.lat_cw         := io.port.lat_cw
-    nvmmctr.io.lat_dr256      := io.port.lat_dr256
-    nvmmctr.io.lat_dr4096     := io.port.lat_dr4096
-    nvmmctr.io.lat_dw256      := io.port.lat_dw256
-    nvmmctr.io.lat_dw4096     := io.port.lat_dw4096
-    io.port.cnt_read          := nvmmctr.io.cnt_read
-    io.port.cnt_write         := nvmmctr.io.cnt_write
-    io.port.cnt_bdr           := nvmmctr.io.cnt_bdr
-    io.port.cnt_bdw           := nvmmctr.io.cnt_bdw
+    //nvmmctr.io.lat_dr256      := io.port.lat_dr256
+    //nvmmctr.io.lat_dr4096     := io.port.lat_dr4096
+    //nvmmctr.io.lat_dw256      := io.port.lat_dw256
+    //nvmmctr.io.lat_dw4096     := io.port.lat_dw4096
+    nvmmctr.io.lat_dr256      := 0.U
+    nvmmctr.io.lat_dr4096     := 0.U
+    nvmmctr.io.lat_dw256      := 0.U
+    nvmmctr.io.lat_dw4096     := 0.U
+    //io.port.cnt_read          := nvmmctr.io.cnt_read
+    //io.port.cnt_write         := nvmmctr.io.cnt_write
+    //io.port.cnt_bdr           := nvmmctr.io.cnt_bdr
+    //io.port.cnt_bdw           := nvmmctr.io.cnt_bdw
 
-    blackbox.io.nvmm_begin    := io.port.nvmm_begin
+    //blackbox.io.nvmm_begin    := io.port.nvmm_begin
     blackbox.io.tRCD2         := io.port.tRCD2
     blackbox.io.tRP2          := io.port.tRP2
-    blackbox.io.tRAS2         := io.port.tRAS2
+    //blackbox.io.tRAS2         := io.port.tRAS2
     io.port.cnt_act           := blackbox.io.cnt_act
 
     //dontTouch(nvmmctr.io)
@@ -291,7 +301,7 @@ class XilinxVC707MIGIsland(c : XilinxVC707MIGParams, val crossing: ClockCrossing
   // helpers
   def genAsyncQueue[T <: Bundle](gen: T, enq_clk: Clock, enq_rst: Bool,
     deq_clk: Clock, deq_rst: Bool) = {
-    val q = Module(new AsyncQueue(gen, AsyncQueueParams(depth = 2)))
+    val q = Module(new AsyncQueue(gen, AsyncQueueParams(depth = 1)))
     q.io.enq_clock := enq_clk
     q.io.enq_reset := enq_rst
     q.io.deq_clock := deq_clk
